@@ -11,17 +11,81 @@
 package confirm
 
 import (
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+func defaultKeymap(affirmative, negative string) keymap {
+	return keymap{
+		Abort: key.NewBinding(
+			key.WithKeys("ctrl+c"),
+			key.WithHelp("ctrl+c", "cancel"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "quit"),
+		),
+		Negative: key.NewBinding(
+			key.WithKeys("n", "N", "q"),
+			key.WithHelp("n", negative),
+		),
+		Affirmative: key.NewBinding(
+			key.WithKeys("y", "Y"),
+			key.WithHelp("y", affirmative),
+		),
+		Toggle: key.NewBinding(
+			key.WithKeys(
+				"left",
+				"h",
+				"ctrl+n",
+				"shift+tab",
+				"right",
+				"l",
+				"ctrl+p",
+				"tab",
+			),
+			key.WithHelp("←→", "toggle"),
+		),
+		Submit: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "submit"),
+		),
+	}
+}
+
+type keymap struct {
+	Abort       key.Binding
+	Quit        key.Binding
+	Negative    key.Binding
+	Affirmative key.Binding
+	Toggle      key.Binding
+	Submit      key.Binding
+}
+
+// FullHelp implements help.KeyMap.
+func (k keymap) FullHelp() [][]key.Binding { return nil }
+
+// ShortHelp implements help.KeyMap.
+func (k keymap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Toggle, k.Submit, k.Affirmative, k.Negative}
+}
 
 type model struct {
 	prompt      string
 	affirmative string
 	negative    string
 	quitting    bool
+	showHelp    bool
+	help        help.Model
+	keys        keymap
 
+	showOutput   bool
 	confirmation bool
+
+	defaultSelection bool
 
 	// styles
 	promptStyle     lipgloss.Style
@@ -36,20 +100,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m, nil
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "left", "h", "ctrl+p", "tab",
-			"right", "l", "ctrl+n", "shift+tab":
-			m.confirmation = !m.confirmation
-		case "enter":
-			m.quitting = true
-			return m, tea.Quit
-		case "y", "Y":
-			m.quitting = true
-			m.confirmation = true
-			return m, tea.Quit
-		case "ctrl+c", "esc", "q", "n", "N":
+		switch {
+		case key.Matches(msg, m.keys.Abort):
+			m.confirmation = false
+			return m, tea.Interrupt
+		case key.Matches(msg, m.keys.Quit):
 			m.confirmation = false
 			m.quitting = true
+			return m, tea.Quit
+		case key.Matches(msg, m.keys.Negative):
+			m.confirmation = false
+			m.quitting = true
+			return m, tea.Quit
+		case key.Matches(msg, m.keys.Toggle):
+			if m.negative == "" {
+				break
+			}
+			m.confirmation = !m.confirmation
+		case key.Matches(msg, m.keys.Submit):
+			m.quitting = true
+			return m, tea.Quit
+		case key.Matches(msg, m.keys.Affirmative):
+			m.quitting = true
+			m.confirmation = true
 			return m, tea.Quit
 		}
 	}
@@ -71,5 +144,23 @@ func (m model) View() string {
 		neg = m.selectedStyle.Render(m.negative)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Center, m.promptStyle.Render(m.prompt), lipgloss.JoinHorizontal(lipgloss.Left, aff, neg))
+	// If the option is intentionally empty, do not show it.
+	if m.negative == "" {
+		neg = ""
+	}
+
+	if m.showHelp {
+		return lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.promptStyle.Render(m.prompt)+"\n",
+			lipgloss.JoinHorizontal(lipgloss.Left, aff, neg),
+			"\n"+m.help.View(m.keys),
+		)
+	}
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.promptStyle.Render(m.prompt)+"\n",
+		lipgloss.JoinHorizontal(lipgloss.Left, aff, neg),
+	)
 }
