@@ -9,7 +9,7 @@ import (
 	"github.com/muesli/termenv"
 )
 
-var code Func = func(input string) (string, error) {
+func code(input, language string) (string, error) {
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(0),
@@ -17,14 +17,14 @@ var code Func = func(input string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to create renderer: %w", err)
 	}
-	output, err := renderer.Render(fmt.Sprintf("```\n%s\n```", input))
+	output, err := renderer.Render(fmt.Sprintf("```%s\n%s\n```", language, input))
 	if err != nil {
 		return "", fmt.Errorf("unable to render: %w", err)
 	}
 	return output, nil
 }
 
-var emoji Func = func(input string) (string, error) {
+func emoji(input string) (string, error) {
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithEmoji(),
 	)
@@ -38,13 +38,13 @@ var emoji Func = func(input string) (string, error) {
 	return output, nil
 }
 
-var markdown Func = func(input string) (string, error) {
+func markdown(input string, theme string) (string, error) {
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle("pink"),
+		glamour.WithStylePath(theme),
 		glamour.WithWordWrap(0),
 	)
 	if err != nil {
-		return "", fmt.Errorf("unable to create renderer: %w", err)
+		return "", fmt.Errorf("unable to render: %w", err)
 	}
 	output, err := renderer.Render(input)
 	if err != nil {
@@ -53,8 +53,8 @@ var markdown Func = func(input string) (string, error) {
 	return output, nil
 }
 
-var template Func = func(input string) (string, error) {
-	f := termenv.TemplateFuncs(termenv.ColorProfile())
+func template(input string) (string, error) {
+	f := termenv.TemplateFuncs(termenv.ANSI256)
 	t, err := tpl.New("tpl").Funcs(f).Parse(input)
 	if err != nil {
 		return "", fmt.Errorf("unable to parse template: %w", err)
